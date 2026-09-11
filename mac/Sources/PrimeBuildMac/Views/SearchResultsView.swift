@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SearchResultsView: View {
     @Environment(AppState.self) private var appState
+    @State private var showPropertyTypeMenu = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 20),
@@ -14,15 +15,17 @@ struct SearchResultsView: View {
     }
 
     var body: some View {
-        @Bindable var appState = appState
-
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 filterBar
 
                 LazyVGrid(columns: columns, spacing: 20) {
                     ForEach(filteredListings) { listing in
-                        ListingCardView(listing: listing, showFullDetails: appState.isAuthenticated)
+                        if appState.isAuthenticated {
+                            FullListingCard(listing: listing)
+                        } else {
+                            PublicListingCard(listing: listing)
+                        }
                     }
                 }
 
@@ -32,9 +35,15 @@ struct SearchResultsView: View {
 
                 footer
             }
-            .padding(28)
+            .frame(maxWidth: 1400)
+            .padding(.horizontal, 32)
+            .padding(.vertical, 28)
+            .frame(maxWidth: .infinity)
         }
+        .background(Theme.cream)
     }
+
+    // MARK: Price presets, scale-aware for sale vs. rental
 
     private var priceSteps: [Double] {
         appState.saleRentalFilter == .rental
@@ -50,109 +59,199 @@ struct SearchResultsView: View {
         return appState.saleRentalFilter == .rental ? "\(text)/mo" : text
     }
 
+    // MARK: Filter bar (§3 "Filter bar")
+
     private var filterBar: some View {
         @Bindable var appState = appState
 
-        return HStack(spacing: 16) {
-            Picker("", selection: $appState.saleRentalFilter) {
-                ForEach(SaleRentalFilter.allCases, id: \.self) { filter in
-                    Text(filter.rawValue).tag(filter)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                saleRentalToggle
+
+                fieldMenu(label: appState.selectedNeighborhood ?? "All Neighborhoods") {
+                    Button("All Neighborhoods") { appState.selectedNeighborhood = nil }
+                    Divider()
+                    ForEach(MockData.neighborhoods, id: \.self) { n in
+                        Button(n) { appState.selectedNeighborhood = n }
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 160)
 
-            Picker("Neighborhood", selection: $appState.selectedNeighborhood) {
-                Text("All Neighborhoods").tag(String?.none)
-                ForEach(MockData.neighborhoods, id: \.self) { n in
-                    Text(n).tag(String?.some(n))
+                fieldMenu(label: appState.minPrice.map(priceLabel) ?? "No Min") {
+                    Button("No Min") { appState.minPrice = nil }
+                    Divider()
+                    ForEach(priceSteps, id: \.self) { step in
+                        Button(priceLabel(step)) { appState.minPrice = step }
+                    }
                 }
-            }
-            .frame(width: 180)
 
-            Picker("Min", selection: $appState.minPrice) {
-                Text("No Min").tag(Double?.none)
-                ForEach(priceSteps, id: \.self) { step in
-                    Text(priceLabel(step)).tag(Double?.some(step))
+                fieldMenu(label: appState.maxPrice.map(priceLabel) ?? "No Max") {
+                    Button("No Max") { appState.maxPrice = nil }
+                    Divider()
+                    ForEach(priceSteps, id: \.self) { step in
+                        Button(priceLabel(step)) { appState.maxPrice = step }
+                    }
                 }
+
+                propertyTypeMenu
+
+                Spacer()
+
+                OliveButton(title: "Search", height: 44) {}
+                    .frame(width: 130)
             }
-            .frame(width: 110)
 
-            Picker("Max", selection: $appState.maxPrice) {
-                Text("No Max").tag(Double?.none)
-                ForEach(priceSteps, id: \.self) { step in
-                    Text(priceLabel(step)).tag(Double?.some(step))
-                }
+            HStack(spacing: 20) {
+                pillGroup(label: "Beds", options: [(0, "Studio"), (1, "1"), (2, "2"), (3, "3"), (4, "4+")], selection: $appState.selectedBeds)
+                pillGroup(label: "Baths", options: [(1, "1"), (2, "2"), (3, "3+")], selection: $appState.selectedBaths)
+                doormanToggle
             }
-            .frame(width: 110)
-
-            Picker("Beds", selection: $appState.minBeds) {
-                Text("Any").tag(Int?.none)
-                Text("Studio").tag(Int?.some(0))
-                Text("1").tag(Int?.some(1))
-                Text("2").tag(Int?.some(2))
-                Text("3").tag(Int?.some(3))
-                Text("4+").tag(Int?.some(4))
-            }
-            .frame(width: 100)
-
-            Picker("Baths", selection: $appState.minBaths) {
-                Text("Any").tag(Int?.none)
-                Text("1").tag(Int?.some(1))
-                Text("2").tag(Int?.some(2))
-                Text("3+").tag(Int?.some(3))
-            }
-            .frame(width: 90)
-
-            Spacer()
-
-            Button("Search") {}
-                .buttonStyle(.plain)
-                .font(.system(size: 13, weight: .semibold))
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Theme.gold)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .padding(16)
-        .background(Color(white: 0.97))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(Theme.surface)
+        .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+    }
+
+    private var saleRentalToggle: some View {
+        HStack(spacing: 0) {
+            ForEach(SaleRentalFilter.allCases, id: \.self) { filter in
+                Button {
+                    appState.saleRentalFilter = filter
+                } label: {
+                    SmallCapsText(filter.rawValue, size: 11, weight: .semibold)
+                        .foregroundStyle(appState.saleRentalFilter == filter ? .white : Theme.ink)
+                        .padding(.horizontal, 18)
+                        .frame(height: 40)
+                }
+                .buttonStyle(.plain)
+                .background(appState.saleRentalFilter == filter ? Theme.olive : Color.clear)
+            }
+        }
+        .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+        .clipShape(Capsule())
+    }
+
+    private func fieldMenu<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+        Menu {
+            content()
+        } label: {
+            HStack {
+                Text(label)
+                    .font(Theme.sans(12))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.down").font(.system(size: 9)).foregroundStyle(Theme.mutedForeground)
+            }
+            .padding(.horizontal, 12)
+            .frame(width: 150, height: 44)
+        }
+        .menuStyle(.borderlessButton)
+        .background(Theme.surface)
+        .overlay(RoundedRectangle(cornerRadius: Theme.hairlineRadius).stroke(Theme.line, lineWidth: 1))
+    }
+
+    private var propertyTypeMenu: some View {
+        Menu {
+            ForEach(MockData.propertyTypes, id: \.self) { type in
+                Button {
+                    if appState.selectedPropertyTypes.contains(type) {
+                        appState.selectedPropertyTypes.remove(type)
+                    } else {
+                        appState.selectedPropertyTypes.insert(type)
+                    }
+                } label: {
+                    HStack {
+                        Text(type)
+                        if appState.selectedPropertyTypes.contains(type) {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+            if !appState.selectedPropertyTypes.isEmpty {
+                Divider()
+                Button("Clear") { appState.selectedPropertyTypes.removeAll() }
+            }
+        } label: {
+            HStack {
+                Text(appState.selectedPropertyTypes.isEmpty ? "Property Type" : "\(appState.selectedPropertyTypes.count) Selected")
+                    .font(Theme.sans(12))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.down").font(.system(size: 9)).foregroundStyle(Theme.mutedForeground)
+            }
+            .padding(.horizontal, 12)
+            .frame(width: 150, height: 44)
+        }
+        .menuStyle(.borderlessButton)
+        .background(Theme.surface)
+        .overlay(RoundedRectangle(cornerRadius: Theme.hairlineRadius).stroke(Theme.line, lineWidth: 1))
+    }
+
+    private func pillGroup(label: String, options: [(Int, String)], selection: Binding<Set<Int>>) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(Theme.sans(11, weight: .medium))
+                .foregroundStyle(Theme.mutedForeground)
+
+            HStack(spacing: 2) {
+                ForEach(options, id: \.0) { value, title in
+                    FilterChip(title: title, isActive: selection.wrappedValue.contains(value)) {
+                        if selection.wrappedValue.contains(value) {
+                            selection.wrappedValue.remove(value)
+                        } else {
+                            selection.wrappedValue.insert(value)
+                        }
+                    }
+                }
+            }
+            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+        }
+    }
+
+    private var doormanToggle: some View {
+        HStack(spacing: 8) {
+            Text("Doorman")
+                .font(Theme.sans(11, weight: .medium))
+                .foregroundStyle(Theme.mutedForeground)
+
+            HStack(spacing: 2) {
+                ForEach(DoormanFilter.allCases) { option in
+                    FilterChip(title: option.rawValue, isActive: appState.doormanFilter == option) {
+                        appState.doormanFilter = option
+                    }
+                }
+            }
+            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+        }
     }
 
     private var registerBanner: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Register to see addresses, square footage, fees, and full listing details")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Theme.charcoal)
-            }
+            Text("Register to see addresses, square footage, fees, and full listing details")
+                .font(Theme.sans(13, weight: .medium))
+                .foregroundStyle(Theme.ink)
             Spacer()
-            Button("Create Free Account") {
+            OliveButton(title: "Create Free Account", height: 40) {
                 appState.navigate(to: .register)
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 13, weight: .semibold))
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(Theme.gold)
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(width: 200)
         }
         .padding(20)
-        .background(Theme.cream)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(Theme.oliveSoft)
+        .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
     }
 
     private var footer: some View {
-        VStack(spacing: 4) {
-            Divider()
+        VStack(spacing: 6) {
+            Divider().overlay(Theme.line)
             Text("Listing information courtesy of RLS at REBNY")
-                .font(Theme.small)
-                .foregroundStyle(Theme.mutedText)
+                .font(Theme.sans(10))
+                .foregroundStyle(Theme.mutedForeground)
             Text("The data relating to real estate displayed on this site comes in part from RLS. Real estate listings held by brokerage firms other than Heather Domi are marked with the RLS logo and detailed information about them includes the name of the listing broker.")
-                .font(.system(size: 10))
-                .foregroundStyle(Theme.mutedText)
+                .font(Theme.sans(9))
+                .foregroundStyle(Theme.mutedForeground)
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 12)

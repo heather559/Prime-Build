@@ -28,7 +28,7 @@ struct RootView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.contentBackground)
+            .background(Theme.cream)
         }
     }
 }

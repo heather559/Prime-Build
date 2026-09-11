@@ -29,6 +29,8 @@ struct Listing: Identifiable, Hashable {
     let description: String
     let imageName: String
     let status: String?
+    let hasDoorman: Bool
+    let isAgentPick: Bool
     var reaction: Reaction?
     var onBoard: Bool = false
     var tourListed: Bool = false

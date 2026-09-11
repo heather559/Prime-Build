@@ -1,7 +1,16 @@
 import SwiftUI
 
+/// §3 Board Review Mode: Tinder-style swipe. Drag physics (translate + rotate
+/// proportional to drag distance), a color tint that ramps in as you approach
+/// the ±80pt commit threshold, and full keyboard support (←/→/↑ = pass/love/maybe).
 struct BoardReviewView: View {
     @Environment(AppState.self) private var appState
+    @State private var dragOffset: CGSize = .zero
+    @State private var exitOffset: CGSize? = nil
+    @State private var exitRotation: Double = 0
+    @FocusState private var isFocused: Bool
+
+    private let commitThreshold: CGFloat = 80
 
     var queue: [Listing] { appState.unreviewedListings }
 
@@ -10,92 +19,144 @@ struct BoardReviewView: View {
             if let listing = queue.first {
                 VStack(spacing: 0) {
                     HStack {
-                        Button("← View Details") {
+                        Button {
                             appState.navigate(to: .listingDetail(listing.id))
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left").font(.system(size: 10))
+                                Text("View Details").font(Theme.sans(11))
+                            }
+                            .foregroundStyle(Theme.mutedForeground)
                         }
                         .buttonStyle(.plain)
-                        .font(Theme.small)
-                        .foregroundStyle(Theme.mutedText)
 
                         Spacer()
 
                         Text("\(appState.reviewedCount + 1) / \(appState.listings.count) · \(queue.count) new")
-                            .font(Theme.small)
-                            .foregroundStyle(Theme.mutedText)
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.mutedForeground)
                     }
                     .padding(20)
 
                     ZStack(alignment: .bottom) {
-                        PlaceholderPhoto(seed: listing.id, height: 520)
+                        ZStack(alignment: .bottom) {
+                            PlaceholderPhoto(seed: listing.id, aspectRatio: nil, fixedHeight: 460)
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(listing.fullAddress)
-                                .font(.system(size: 20, weight: .bold))
-                                .foregroundStyle(.white)
-                            Text(listing.displayPrice)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(Theme.gold)
-                            Text("\(listing.beds == 0 ? "Studio" : "\(listing.beds) Bed") · \(listing.baths) Bath · \(listing.neighborhood)")
-                                .font(Theme.body)
-                                .foregroundStyle(.white.opacity(0.85))
+                            tintOverlay
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(listing.fullAddress)
+                                    .font(Theme.display(20))
+                                    .tracking(20 * Theme.headingTracking)
+                                    .foregroundStyle(.white)
+                                Text(listing.displayPrice)
+                                    .font(Theme.display(17))
+                                    .tracking(17 * Theme.priceTracking)
+                                    .foregroundStyle(Theme.champagne)
+                                Text("\(listing.beds == 0 ? "Studio" : "\(listing.beds) Bed") · \(listing.baths) Bath · \(listing.neighborhood)")
+                                    .font(Theme.sans(13))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
+                            .padding(20)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .bottom, endPoint: .top)
+                            )
                         }
-                        .padding(20)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            LinearGradient(colors: [.black.opacity(0.75), .clear], startPoint: .bottom, endPoint: .top)
+                        .offset(x: exitOffset?.width ?? dragOffset.width, y: exitOffset?.height ?? dragOffset.height)
+                        .rotationEffect(.degrees(exitOffset != nil ? exitRotation : Double(dragOffset.width / 20)))
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    guard exitOffset == nil else { return }
+                                    dragOffset = value.translation
+                                }
+                                .onEnded { value in
+                                    guard exitOffset == nil else { return }
+                                    handleRelease(value.translation, for: listing)
+                                }
                         )
+                        .animation(.interactiveSpring(), value: dragOffset)
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(Rectangle())
                     .padding(.horizontal, 40)
 
-                    HStack(spacing: 40) {
-                        actionButton("Pass", "xmark", .pass, tint: .red)
-                        actionButton("Maybe", "clock.fill", .maybe, tint: .gray)
-                        actionButton("Love", "heart.fill", .love, tint: Theme.gold)
+                    HStack(spacing: 32) {
+                        InkOutlineButton(title: "Pass", height: 48) { commit(.pass, for: listing) }
+                            .frame(width: 130)
+                        OliveButton(title: "Love", height: 56) { commit(.love, for: listing) }
+                            .frame(width: 170)
+                        InkOutlineButton(title: "Maybe", height: 48) { commit(.maybe, for: listing) }
+                            .frame(width: 130)
                     }
                     .padding(.vertical, 28)
                 }
+                .focusable()
+                .focusEffectDisabled()
+                .focused($isFocused)
+                .onAppear { isFocused = true }
+                .onKeyPress(.leftArrow) { commit(.pass, for: listing); return .handled }
+                .onKeyPress(.rightArrow) { commit(.love, for: listing); return .handled }
+                .onKeyPress(.upArrow) { commit(.maybe, for: listing); return .handled }
             } else {
                 VStack(spacing: 12) {
                     Text("All caught up")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(Theme.display(20))
+                        .foregroundStyle(Theme.ink)
                     Text("You've reviewed every new listing. Check the Board for a full summary.")
-                        .font(Theme.body)
-                        .foregroundStyle(Theme.mutedText)
-                    Button("Go to Board") { appState.navigate(to: .boardMode) }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Theme.gold)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .font(Theme.sans(13))
+                        .foregroundStyle(Theme.mutedForeground)
+                    OliveButton(title: "Go to Board") { appState.navigate(to: .boardMode) }
+                        .frame(width: 180)
+                        .padding(.top, 8)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(white: 0.98))
-        .animation(.easeInOut, value: queue.first?.id)
+        .background(Theme.cream)
     }
 
-    private func actionButton(_ label: String, _ systemImage: String, _ reaction: Reaction, tint: Color) -> some View {
-        Button {
-            if let listing = queue.first {
-                appState.setReaction(reaction, for: listing.id)
-            }
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22))
-                    .frame(width: 56, height: 56)
-                    .background(Color.white)
-                    .foregroundStyle(tint)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(tint.opacity(0.4), lineWidth: 1))
-                Text(label)
-                    .font(Theme.small)
-                    .foregroundStyle(Theme.mutedText)
+    private var tintOverlay: some View {
+        let progress = min(abs(dragOffset.width) / commitThreshold, 1)
+        let isMaybe = abs(dragOffset.height) > abs(dragOffset.width) && dragOffset.height < -20
+        let color: Color = isMaybe ? Theme.ash : (dragOffset.width > 0 ? Theme.olive : Theme.taupe)
+        return Rectangle()
+            .fill(color)
+            .opacity(exitOffset == nil ? Double(progress) * 0.35 : 0)
+    }
+
+    private func handleRelease(_ translation: CGSize, for listing: Listing) {
+        if translation.height < -commitThreshold, abs(translation.height) > abs(translation.width) {
+            commit(.maybe, for: listing)
+        } else if translation.width > commitThreshold {
+            commit(.love, for: listing)
+        } else if translation.width < -commitThreshold {
+            commit(.pass, for: listing)
+        } else {
+            withAnimation(Theme.standardEase) { dragOffset = .zero }
+        }
+    }
+
+    private func commit(_ reaction: Reaction, for listing: Listing) {
+        let width: CGFloat = 900
+        withAnimation(.easeIn(duration: 0.3)) {
+            switch reaction {
+            case .love:
+                exitOffset = CGSize(width: width * 1.2, height: 0)
+                exitRotation = 8
+            case .pass:
+                exitOffset = CGSize(width: -width * 1.2, height: 0)
+                exitRotation = -8
+            case .maybe:
+                exitOffset = CGSize(width: 0, height: -900)
+                exitRotation = 0
             }
         }
-        .buttonStyle(.plain)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            appState.setReaction(reaction, for: listing.id)
+            dragOffset = .zero
+            exitOffset = nil
+            exitRotation = 0
+        }
     }
 }

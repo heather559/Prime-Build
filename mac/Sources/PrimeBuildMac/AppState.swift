@@ -15,6 +15,14 @@ enum SaleRentalFilter: String, CaseIterable {
     case rental = "Rental"
 }
 
+enum DoormanFilter: String, CaseIterable, Identifiable {
+    case any = "Any"
+    case doorman = "Doorman"
+    case nonDoorman = "Non-Doorman"
+
+    var id: String { rawValue }
+}
+
 enum BoardFilter: String, CaseIterable, Identifiable {
     case all = "All"
     case loved = "Loved"
@@ -31,15 +39,18 @@ final class AppState {
     var isAuthenticated: Bool = false
     var route: Route = .search
     var listings: [Listing] = MockData.listings
+
+    // Filter bar state (design spec §"Filter bar")
     var saleRentalFilter: SaleRentalFilter = .sale
     var selectedNeighborhood: String? = nil
     var minPrice: Double? = nil
     var maxPrice: Double? = nil
-    var minBeds: Int? = nil
-    var minBaths: Int? = nil
-    var boardFilter: BoardFilter = .all
-    var reviewIndex: Int = 0
+    var selectedBeds: Set<Int> = [] // multi-select pills; empty = any
+    var selectedBaths: Set<Int> = [] // multi-select pills; empty = any
+    var selectedPropertyTypes: Set<String> = [] // multi-check; empty = any
+    var doormanFilter: DoormanFilter = .any
 
+    var boardFilter: BoardFilter = .all
     var userName: String = "Sarah"
 
     func listing(id: String) -> Listing? {
@@ -70,21 +81,26 @@ final class AppState {
             let effectivePrice = listing.listingType == .rental ? (listing.rentPerMonth ?? 0) : listing.price
             if let minPrice, effectivePrice < minPrice { return false }
             if let maxPrice, effectivePrice > maxPrice { return false }
-            if let minBeds {
-                if minBeds == 0 {
-                    if listing.beds != 0 { return false }
-                } else if minBeds >= 4 {
-                    if listing.beds < 4 { return false }
-                } else if listing.beds != minBeds {
-                    return false
+
+            if !selectedBeds.isEmpty {
+                let matches = selectedBeds.contains { bedOption in
+                    bedOption >= 4 ? listing.beds >= 4 : listing.beds == bedOption
                 }
+                if !matches { return false }
             }
-            if let minBaths {
-                if minBaths >= 3 {
-                    if listing.baths < 3 { return false }
-                } else if listing.baths != minBaths {
-                    return false
+            if !selectedBaths.isEmpty {
+                let matches = selectedBaths.contains { bathOption in
+                    bathOption >= 3 ? listing.baths >= 3 : listing.baths == bathOption
                 }
+                if !matches { return false }
+            }
+            if !selectedPropertyTypes.isEmpty, !selectedPropertyTypes.contains(listing.propertyType) {
+                return false
+            }
+            switch doormanFilter {
+            case .any: break
+            case .doorman: if !listing.hasDoorman { return false }
+            case .nonDoorman: if listing.hasDoorman { return false }
             }
             return true
         }

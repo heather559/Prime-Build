@@ -10,7 +10,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "PrimeBuildMac",
-            path: "Sources/PrimeBuildMac"
+            path: "Sources/PrimeBuildMac",
+            resources: [.copy("Resources")]
         )
     ]
 )

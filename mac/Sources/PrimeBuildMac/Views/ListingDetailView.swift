@@ -8,18 +8,18 @@ struct ListingDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                PlaceholderPhoto(seed: "\(listing.id)-\(selectedThumbnail)", height: 380)
+                PlaceholderPhoto(seed: "\(listing.id)-\(selectedThumbnail)", aspectRatio: nil, fixedHeight: 420)
 
                 HStack(spacing: 12) {
                     ForEach(0..<5, id: \.self) { index in
                         Button {
                             selectedThumbnail = index
                         } label: {
-                            PlaceholderPhoto(seed: "\(listing.id)-\(index)", height: 64)
+                            PlaceholderPhoto(seed: "\(listing.id)-\(index)", aspectRatio: nil, fixedHeight: 64)
                                 .frame(width: 90)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .stroke(selectedThumbnail == index ? Theme.gold : .clear, lineWidth: 2)
+                                    Rectangle()
+                                        .stroke(selectedThumbnail == index ? Theme.champagne : .clear, lineWidth: 2)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -30,107 +30,100 @@ struct ListingDetailView: View {
                 HStack(alignment: .top, spacing: 32) {
                     VStack(alignment: .leading, spacing: 16) {
                         Text(listing.fullAddress)
-                            .font(.system(size: 26, weight: .bold))
+                            .font(Theme.display(28))
+                            .tracking(28 * Theme.headingTracking)
+                            .foregroundStyle(Theme.ink)
+
                         Text(listing.displayPrice)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(Theme.gold)
+                            .font(Theme.display(22))
+                            .tracking(22 * Theme.priceTracking)
+                            .foregroundStyle(Theme.olive)
 
                         Text("\(listing.beds == 0 ? "Studio" : "\(listing.beds) Beds") · \(listing.baths) Bath · \(listing.sqft) sq ft · \(listing.propertyType)")
-                            .font(Theme.body)
-                            .foregroundStyle(Theme.mutedText)
+                            .font(Theme.sans(13))
+                            .foregroundStyle(Theme.mutedForeground)
 
                         if let maintenance = listing.maintenance {
                             Text("Monthly maintenance: \(currency(maintenance))/mo")
-                                .font(Theme.body)
-                                .foregroundStyle(Theme.mutedText)
+                                .font(Theme.sans(13))
+                                .foregroundStyle(Theme.mutedForeground)
                         }
 
                         Text(listing.description)
-                            .font(Theme.body)
-                            .foregroundStyle(.black)
+                            .font(Theme.sans(13))
+                            .foregroundStyle(Theme.ink)
                             .padding(.top, 8)
 
                         Text("Listing Courtesy of \(listing.brokerName)")
-                            .font(Theme.small)
-                            .foregroundStyle(Theme.mutedText)
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.mutedForeground)
 
-                        Divider().padding(.vertical, 12)
+                        Divider().overlay(Theme.line).padding(.vertical, 12)
 
                         Text("RLS Data display by Heather Domi Team")
-                            .font(Theme.small)
-                            .foregroundStyle(Theme.mutedText)
+                            .font(Theme.sans(11))
+                            .foregroundStyle(Theme.mutedForeground)
                         Text("Listing information courtesy of RLS at REBNY. Real estate listings held by brokerage firms other than Heather Domi are marked with the RLS logo.")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Theme.mutedText)
+                            .font(Theme.sans(9))
+                            .foregroundStyle(Theme.mutedForeground)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1.7)
 
                     VStack(alignment: .leading, spacing: 14) {
                         Text(listing.displayPrice)
-                            .font(.system(size: 20, weight: .bold))
-
-                        HStack(spacing: 16) {
-                            reactionButton(.love, "heart.fill")
-                            reactionButton(.maybe, "clock.fill")
-                            reactionButton(.pass, "xmark")
-                        }
-
-                        Button(listing.tourListed ? "Added to Tour ✓" : "Add to Tour List") {
-                            appState.toggleTour(for: listing.id)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(listing.tourListed ? Theme.mutedText : Theme.gold)
-                        .foregroundStyle(.white)
-                        .font(.system(size: 13, weight: .semibold))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                        Button(listing.onBoard ? "Saved to Board ✓" : "Save to Board") {
-                            appState.toggleBoard(for: listing.id)
-                        }
-                        .buttonStyle(.plain)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.charcoal, lineWidth: 1))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.charcoal)
-
-                        Divider().padding(.vertical, 8)
+                            .font(Theme.display(19))
+                            .tracking(19 * Theme.priceTracking)
+                            .foregroundStyle(Theme.ink)
 
                         HStack(spacing: 12) {
-                            Circle().fill(Color(white: 0.85)).frame(width: 48, height: 48)
-                                .overlay(Text("HD").font(.system(size: 12, weight: .bold)))
+                            ReactionButton(systemImage: "heart.fill", isActive: listing.reaction == .love) {
+                                appState.setReaction(.love, for: listing.id)
+                            }
+                            ReactionButton(systemImage: "clock.fill", isActive: listing.reaction == .maybe) {
+                                appState.setReaction(.maybe, for: listing.id)
+                            }
+                            ReactionButton(systemImage: "xmark", isActive: listing.reaction == .pass) {
+                                appState.setReaction(.pass, for: listing.id)
+                            }
+                        }
+
+                        OliveButton(title: listing.tourListed ? "Added to Tour" : "Add to Tour List") {
+                            appState.toggleTour(for: listing.id)
+                        }
+
+                        InkOutlineButton(title: listing.onBoard ? "Saved to Board" : "Save to Board") {
+                            appState.toggleBoard(for: listing.id)
+                        }
+
+                        Divider().overlay(Theme.line).padding(.vertical, 8)
+
+                        HStack(spacing: 12) {
+                            Circle().fill(Theme.oliveSoft).frame(width: 48, height: 48)
+                                .overlay(
+                                    Text("HD")
+                                        .font(Theme.sans(12, weight: .semibold))
+                                        .foregroundStyle(Theme.olive)
+                                )
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Heather Domi").font(.system(size: 13, weight: .semibold))
-                                Text("(212) 555-0123").font(Theme.small).foregroundStyle(Theme.mutedText)
-                                Text("heather@heatherdomi.com").font(Theme.small).foregroundStyle(Theme.mutedText)
+                                Text("Heather Domi").font(Theme.sans(13, weight: .semibold)).foregroundStyle(Theme.ink)
+                                Text("(212) 555-0123").font(Theme.sans(11)).foregroundStyle(Theme.mutedForeground)
+                                Text("heather@heatherdomi.com").font(Theme.sans(11)).foregroundStyle(Theme.mutedForeground)
                             }
                         }
                     }
                     .padding(16)
                     .frame(width: 260)
-                    .background(Color(white: 0.97))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .background(Theme.surface)
+                    .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+                    .layoutPriority(1)
                 }
                 .padding(24)
+                .frame(maxWidth: 1240)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-    }
-
-    private func reactionButton(_ reaction: Reaction, _ systemImage: String) -> some View {
-        Button {
-            appState.setReaction(reaction, for: listing.id)
-        } label: {
-            Image(systemName: systemImage)
-                .font(.system(size: 18))
-                .foregroundStyle(listing.reaction == reaction ? Theme.gold : Theme.mutedText)
-                .frame(width: 36, height: 36)
-                .background(Color.white)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(Color.black.opacity(0.1)))
-        }
-        .buttonStyle(.plain)
+        .background(Theme.cream)
     }
 
     private func currency(_ value: Double) -> String {
